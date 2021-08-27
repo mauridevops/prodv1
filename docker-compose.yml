@@ -98,7 +98,7 @@ services:
     expose:
       - 4443:8080
     volumes:
-      - wordpressv:/data
+      - wordpress_data:/data
       - filebconfv:/config
     environment:
       VIRTUAL_HOST: ${FILES_DOMAIN},${FILES_DOMAIN_WWW}
