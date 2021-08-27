@@ -1,1 +1,120 @@
+version: '3'
 
+services:
+  nginx-proxy:
+    image: jwilder/nginx-proxy
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - /var/run/docker.sock:/tmp/docker.sock:ro
+      - certs:/etc/nginx/certs:ro
+      - vhostd:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+    labels:
+      - com.github.jrcs.letsencrypt_nginx_proxy_companion.nginx_proxy
+
+  letsencrypt:
+    image: jrcs/letsencrypt-nginx-proxy-companion
+    restart: always
+    environment:
+      - NGINX_PROXY_CONTAINER=nginx-proxy
+    volumes:
+      - certs:/etc/nginx/certs:rw
+      - vhostd:/etc/nginx/vhost.d
+      - html:/usr/share/nginx/html
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+ mariadb:
+    image: docker.io/bitnami/mariadb:10.3
+    volumes:
+      - mariadb_data:/bitnami/mariadb
+    environment:
+      ALLOW_EMPTY_PASSWORD: no
+      MARIADB_USER: ${WP_DB_USER}
+      MARIADB_DATABASE: ${WP_DB_NAME}
+    restart: unless-stopped
+
+  wordpress:
+    image: docker.io/bitnami/wordpress-nginx:5
+    expose:
+      - 80
+    volumes:
+      - wordpress_data:/bitnami/wordpress
+    depends_on:
+      - mysql
+      - nginx-proxy
+      - letsencrypt
+    environment:
+      NGINX_HTTP_PORT_NUMBER: 80
+      VIRTUAL_HOST: ${WP_DOMAIN},${WP_DOMAIN_WWW}
+      LETSENCRYPT_HOST: ${WP_DOMAIN},${WP_DOMAIN_WWW}
+      LETSENCRYPT_EMAIL: ${SSL_EMAIL}
+      WORDPRESS_USERNAME: ${WP_ADMIN_USERNAME}
+      WORDPRESS_PASSWORD: ${WP_ADMIN_PASSWORD}
+      WORDPRESS_EMAIL: ${WP_ADMIN_EMAIL}
+      WORDPRESS_BLOG_NAME: ${WP_SITE_TITLE}
+      WORDPRESS_SMTP_HOST: ${WP_SMTP_HOST}
+      WORDPRESS_SMTP_PORT: ${WP_SMTP_PORT}
+      WORDPRESS_SMTP_USER: ${WP_SMTP_USER}
+      WORDPRESS_SMTP_PASSWORD: ${WP_SMTP_PASSWORD}
+      PHP_MAX_EXECUTION_TIME: ${PHP_MAX_EXECUTION_TIME}
+      PHP_MAX_INPUT_TIME: ${PHP_MAX_INPUT_TIME}
+      PHP_MAX_INPUT_VARS: ${PHP_MAX_INPUT_VARS}
+      PHP_MEMORY_LIMIT: ${PHP_MEMORY_LIMIT}
+      PHP_POST_MAX_SIZE: ${PHP_POST_MAX_SIZE}
+      PHP_UPLOAD_MAX_FILESIZE: ${PHP_UPLOAD_MAX_FILESIZE}
+      WORDPRESS_RESET_DATA_PERMISSIONS: yes
+      ALLOW_EMPTY_PASSWORD: no
+      WORDPRESS_DATABASE_HOST: mysql
+      WORDPRESS_DATABASE_PORT_NUMBER: 3306
+      WORDPRESS_DATABASE_USER: ${WP_DB_USER}
+      WORDPRESS_DATABASE_NAME: ${WP_DB_NAME}
+      WORDPRESS_DATABASE_PASSWORD: ${WP_DB_PASSWORD}
+    restart: unless-stopped
+      
+  phpmyadmin:
+    image: splattael/phpmyadmin:4.9.7
+    container_name: phpmyadmin
+    restart: always
+    expose:
+      - 80
+    environment:
+      PMA_HOST: mysql
+      PMA_PORT: 3306
+      PMA_ARBITRARY: 1
+      MYSQL_ROOT_PASSWORD: ${SQL_ROOT_PASSWORD} 
+      VIRTUAL_HOST: ${PHP_MYADMIN_DOMAIN},${PHP_MYADMIN_DOMAIN_WWW}
+      LETSENCRYPT_HOST: ${PHP_MYADMIN_DOMAIN},${PHP_MYADMIN_DOMAIN_WWW}
+      LETSENCRYPT_EMAIL: ${SSL_EMAIL}
+    depends_on:
+      - mysql 
+   
+  filebrowser:
+    image: hurlenko/filebrowser
+    container_name: file-browser
+    user: "${UID}:${GID}"
+    expose:
+      - 4443:8080
+    volumes:
+      - wordpressv:/data
+      - filebconfv:/config
+    environment:
+      VIRTUAL_HOST: ${FILES_DOMAIN},${FILES_DOMAIN_WWW}
+      LETSENCRYPT_HOST: ${FILES_DOMAIN},${FILES_DOMAIN_WWW}
+      LETSENCRYPT_EMAIL: ${SSL_EMAIL}
+      FB_BASEURL: /filebrowser
+    restart: always
+    depends_on:
+      - wordpress   
+      - nginx-proxy
+      - letsencrypt
+
+volumes: 
+  certs:
+  vhostd:
+  html:
+  mariadb_data:
+  wordpress_data: 
+  filebconfv:
